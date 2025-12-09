@@ -82,6 +82,41 @@ If you prefer to pull prebuilt images from GHCR directly:
   - Frontend: http://localhost:4380 (public), Backend: internal (proxied by frontend)
   - Note: Ensure `docker-compose.ghcr.yml` is saved in your current directory. If you didn’t clone the repo, download/save this file locally first, then run the above command from the same directory.
 
+## Quick Install
+
+Linux / macOS (bash):
+
+```bash
+#!/usr/bin/env bash
+
+# Download compose file
+curl -L https://raw.githubusercontent.com/lisacek/reviewsflow/refs/heads/main/docker-compose.ghcr.yml \
+  -o docker-compose.ghcr.yml
+
+# Start the stack
+docker compose -f docker-compose.ghcr.yml up -d
+
+# Open: http://<YOUR_SERVER_IP>:4380
+```
+
+Windows (PowerShell):
+
+```powershell
+# Download compose file
+Invoke-WebRequest `
+  -Uri "https://raw.githubusercontent.com/lisacek/reviewsflow/refs/heads/main/docker-compose.ghcr.yml" `
+  -OutFile "docker-compose.ghcr.yml"
+
+# Start the stack
+docker compose -f docker-compose.ghcr.yml up -d
+
+# Open: http://<YOUR_SERVER_IP>:4380
+```
+
+Notes:
+- The backend is internal; the frontend proxies API calls for you.
+- If you re-run later, you can pull the latest images first: `docker compose -f docker-compose.ghcr.yml pull`.
+
 - Or run with plain Docker (advanced):
   - `docker network create reviewsflow-net`
   - Database:
