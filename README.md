@@ -46,7 +46,7 @@ Notes:
 - Lint: `npm run lint`
 
 Environment variables (optional):
-- `.env.development` / `.env.production` should define `VITE_API_BASE` (e.g., `http://localhost:8000`). The app and builder read this value; dev proxy is also wired to `VITE_API_BASE`.
+- `.env.development` / `.env.production` should define `VITE_API_BASE` (e.g., `http://localhost:8480`). The app and builder read this value; dev proxy is also wired to `VITE_API_BASE`.
 
 ## Building
 - `npm run build` runs two builds:
@@ -56,18 +56,40 @@ Environment variables (optional):
 ## Docker
 - Build frontend image locally:
   - `docker build -t reviewsflow-frontend ./frontend`
-  - `docker run -p 3000:80 reviewsflow-frontend`
+  - `docker run -p 4380:80 reviewsflow-frontend`
 - Full stack with compose (frontend + backend + MySQL):
   - `docker compose up -d`
-  - Frontend: http://localhost:3000, Backend: http://localhost:8000
+  - Frontend: http://localhost:4380, Backend: http://localhost:8480
 
 For deployment via GHCR, publish both images and run with `docker-compose.ghcr.yml`:
 - Build and push via GitHub Actions (`.github/workflows/ghcr.yml`) or locally:
   - Backend: `docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/<OWNER>/reviewsflow-backend:latest ./backend --push`
-  - Frontend: `docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/<OWNER>/reviewsflow-frontend:latest ./frontend --build-arg VITE_API_BASE=http://backend:8000 --push`
+  - Frontend: `docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/<OWNER>/reviewsflow-frontend:latest ./frontend --build-arg VITE_API_BASE=http://localhost:8480 --push`
 - Run with GHCR images:
   - `set GHCR_OWNER=<OWNER>` (Windows PowerShell) or `export GHCR_OWNER=<OWNER>` (bash)
   - `docker compose -f docker-compose.ghcr.yml up -d`
+
+## Run Via Docker (GHCR)
+
+If you prefer to pull prebuilt images from GHCR directly:
+
+- Pull images:
+  - `docker pull ghcr.io/lisacek/reviewsflow-frontend:latest`
+  - `docker pull ghcr.io/lisacek/reviewsflow-backend:latest`
+
+- Run with Compose using GHCR images (recommended):
+  - `docker compose -f docker-compose.ghcr.yml up -d`
+  - Frontend: http://localhost:4380, Backend: http://localhost:8480
+
+- Or run with plain Docker (advanced):
+  - `docker network create reviewsflow-net`
+  - Database:
+    - `docker run -d --name reviewsflow-db --network reviewsflow-net -e MYSQL_DATABASE=reviews -e MYSQL_USER=reviews -e MYSQL_PASSWORD=reviews -e MYSQL_ROOT_PASSWORD=root -v reviewsflow-db:/var/lib/mysql mysql:8.0 --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci`
+  - Backend:
+    - `docker run -d --name reviewsflow-backend --network reviewsflow-net -e DATABASE_URL=mysql+aiomysql://reviews:reviews@reviewsflow-db:3306/reviews -e HEADLESS=true -e ALLOW_REGISTRATIONS=true -p 8480:8000 ghcr.io/lisacek/reviewsflow-backend:latest`
+  - Frontend:
+    - `docker run -d --name reviewsflow-frontend --network reviewsflow-net -p 4380:80 ghcr.io/lisacek/reviewsflow-frontend:latest`
+    - Note: The frontend image reads `VITE_API_BASE` at build-time. Ensure it was built with `http://localhost:8480` so the browser can reach the backend from your host. If not, rebuild the frontend with `--build-arg VITE_API_BASE=http://localhost:8480` or use the provided compose setup which sets this for local builds.
 
 NGINX config (`nginx.conf`) serves the SPA with a fallback to `index.html`.
 

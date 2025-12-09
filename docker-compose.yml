@@ -30,18 +30,18 @@ services:
     depends_on:
       - db
     ports:
-      - "8000:8000"
+      - "8480:8000"
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE: http://backend:8000
+        VITE_API_BASE: http://localhost:8480
     depends_on:
       - backend
     ports:
-      - "3000:80"
+      - "4380:80"
 
 volumes:
   db_data:
