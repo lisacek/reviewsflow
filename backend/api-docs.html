@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Maps Reviews API Docs</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 32px; color: #111; }
+      header { display:flex; gap:16px; align-items:center; flex-wrap: wrap; }
+      a.button { display:inline-block; padding:8px 12px; border:1px solid #ccc; border-radius:6px; text-decoration:none; color:#111; background:#f7f7f7; }
+      code, pre { background:#f4f4f4; padding:2px 4px; border-radius:4px; }
+      pre { padding:12px; overflow:auto; }
+      h1 { margin-bottom: 4px; }
+      h2 { margin-top:28px; }
+      .muted { color:#666; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Maps Reviews API</h1>
+      <a class="button" href="http://localhost:8000/docs" target="_blank" rel="noopener">Open Swagger UI</a>
+      <a class="button" href="http://localhost:8000/redoc" target="_blank" rel="noopener">Open ReDoc</a>
+      <a class="button" href="API_ENDPOINTS.txt" target="_blank" rel="noopener">Text Reference</a>
+    </header>
+    <p class="muted">Base URL: <code>http://localhost:8000</code></p>
+
+    <h2>Quickstart</h2>
+    <ol>
+      <li>Log in to get a token:
+        <pre>curl -s -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=user@example.com&amp;password=secret"</pre>
+      </li>
+      <li>Use the token with API calls:
+        <pre>curl -H "Authorization: Bearer &lt;token&gt;" http://localhost:8000/me</pre>
+      </li>
+      <li>Create an instance (server-to-server use):
+        <pre>curl -s -X POST http://localhost:8000/instances \
+  -H "Authorization: Bearer &lt;token&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "place_url": "https://www.google.com/maps/place/...",
+        "locales": ["cs-CZ", "en-US"],
+        "min_rating": 4,
+        "max_reviews": 50,
+        "sort": "newest"
+      }'</pre>
+      </li>
+      <li>Fetch reviews via API:
+        <pre>curl -H "Authorization: Bearer &lt;token&gt;" http://localhost:8000/api/reviews/&lt;instance_id&gt;</pre>
+      </li>
+      <li>Or use the public embed endpoint (no auth):
+        <pre>curl http://localhost:8000/public/reviews/&lt;public_key&gt;</pre>
+      </li>
+    </ol>
+
+    <h2>Explore Endpoints</h2>
+    <p>Use <a href="http://localhost:8000/docs" target="_blank" rel="noopener">Swagger UI</a> to try requests interactively, or read the full <a href="API_ENDPOINTS.txt" target="_blank" rel="noopener">text reference</a>.</p>
+
+    <h2>Notes</h2>
+    <ul>
+      <li>Caching is per <code>(place_url, locale)</code>; TTL is configurable.</li>
+      <li>Locale codes: see <code>GET /locales</code>. Sorting: <code>newest</code> (default), <code>oldest</code>, <code>best</code>, <code>worst</code>.</li>
+      <li>Public endpoint may be restricted by allowed domains set by the instance owner.</li>
+    </ul>
+  </body>
+  </html>
+

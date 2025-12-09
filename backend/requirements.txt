@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+playwright
+playwright-stealth
+sqlalchemy
+aiosqlite
+pymysql
+aiomysql
+pydantic
+python-dotenv
+pydantic-settings
+pyyaml
+passlib[bcrypt]
+python-jose[cryptography]

@@ -1,0 +1,50 @@
+# Application configuration for Maps Reviews API
+# You can set these via environment or override here.
+# Values here override env defaults (loader merges env -> YAML).
+
+app:
+  # Database connection string (async SQLAlchemy URL)
+  # For SQLite (default):
+  database_url: "sqlite+aiosqlite:///./reviews.db"
+
+  # MySQL examples:
+  # database_url: "mysql+aiomysql://username:password@localhost:3306/reviews?charset=utf8mb4"
+  # or with asyncmy driver:
+  # database_url: "mysql+asyncmy://username:password@localhost:3306/reviews?charset=utf8mb4"
+
+  # Postgres example:
+  # database_url: "postgresql+asyncpg://username:password@localhost:5432/reviews"
+
+  # Alternatively, compose the URL from discrete fields (only used if database_url is empty)
+  db_dialect: null      # "mysql" | "postgresql" | "sqlite"
+  db_driver: null       # e.g., "aiomysql" | "asyncmy" | "asyncpg" | "aiosqlite"
+  db_host: null
+  db_port: null
+  db_user: null
+  db_password: null
+  db_name: null         # for sqlite, this can be a file path like "./reviews.db"
+
+  # Playwright / scraping behaviour
+  headless: true
+  max_playwright_instances: 2     # Max concurrent browser contexts
+
+  # Caching
+  cache_ttl_minutes: 1440         # Minutes before cached entries refresh
+
+  # Monitoring loop
+  monitor_poll_seconds: 60        # How often to check monitors/instances
+  worker_count: 1                 # Reserved for future worker scale control
+
+  # Locales used when none specified (must exist in app.locales)
+  # Examples: ["en-US", "cs-CZ"]
+  default_locales: ["en-US"]
+
+  # Auth and multi-tenant options
+  allow_registrations: true       # Allow public signups
+  admin_email: null               # If registrations disabled and no users exist, bootstrap this admin
+  admin_password: null
+  jwt_secret: "devsecret-change-me"  # Change in production
+  jwt_expire_minutes: 1440        # Token lifetime
+
+  # Business logic defaults (used by some endpoints)
+  min_rating: 4.0                 # Default threshold in examples; endpoints can override

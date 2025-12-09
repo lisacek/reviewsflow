@@ -1,0 +1,47 @@
+version: '3.9'
+
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: reviews
+      MYSQL_USER: reviews
+      MYSQL_PASSWORD: reviews
+      MYSQL_ROOT_PASSWORD: root
+    command: [
+      "--default-authentication-plugin=mysql_native_password",
+      "--character-set-server=utf8mb4",
+      "--collation-server=utf8mb4_unicode_ci"
+    ]
+    volumes:
+      - db_data:/var/lib/mysql
+
+  backend:
+    image: ghcr.io/${GHCR_OWNER:-your-gh-username}/reviewsflow-backend:latest
+    environment:
+      DATABASE_URL: mysql+aiomysql://reviews:reviews@db:3306/reviews
+      HEADLESS: "true"
+      ALLOW_REGISTRATIONS: "true"
+      WORKER_COUNT: 1
+      MAX_PLAYWRIGHT_INSTANCES: 2
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+
+  frontend:
+    image: ghcr.io/${GHCR_OWNER:-your-gh-username}/reviewsflow-frontend:latest
+    depends_on:
+      - backend
+    environment:
+      # Optional: if your frontend uses runtime config via env (not build)
+      # VITE_API_BASE is baked at build; override only if image expects it.
+      # VITE_API_BASE: http://backend:8000
+      NGINX_PORT: 80
+    ports:
+      - "3000:80"
+
+volumes:
+  db_data:
+
