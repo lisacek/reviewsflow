@@ -5,8 +5,8 @@ COPY package*.json ./
 RUN npm ci
 COPY . .
 
-# Allow overriding API base at build time
-ARG VITE_API_BASE=http://localhost:8480
+# Allow overriding API base at build time (empty => relative calls)
+ARG VITE_API_BASE=
 ENV VITE_API_BASE=$VITE_API_BASE
 
 RUN npm run build

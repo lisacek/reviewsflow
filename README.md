@@ -21,7 +21,7 @@ Place this snippet on any site/page where you want the reviews to appear:
 <div id="reviews-widget"></div>
 <link rel="stylesheet" href="https://YOUR_HOST/widget.css" />
 <script src="https://YOUR_HOST/widget.js"
-  data-api-base="https://API_HOST"
+  data-api-base="https://YOUR_HOST"
   data-instance="PUBLIC_KEY"
   data-min-rating="4"
   data-max-reviews="6"
@@ -30,7 +30,7 @@ Place this snippet on any site/page where you want the reviews to appear:
 ```
 
 Supported attributes:
-- `data-api-base`: Base URL of your backend (required, e.g., `https://api.example.com`).
+- `data-api-base`: Base URL of your backend (required). With the provided Docker setup, the frontend proxies API paths to the backend, so use your frontend origin (e.g., `https://your-domain.com`).
 - `data-instance`: Public key identifying the instance to fetch (required).
 - `data-target`: Optional element id to mount into (defaults to `reviews-widget`).
 - `data-min-rating`: Minimum star rating to show (default `4`).
@@ -59,12 +59,12 @@ Environment variables (optional):
   - `docker run -p 4380:80 reviewsflow-frontend`
 - Full stack with compose (frontend + backend + MySQL):
   - `docker compose up -d`
-  - Frontend: http://localhost:4380, Backend: http://localhost:8480
+  - Frontend: http://localhost:4380 (public), Backend: internal (proxied by frontend)
 
 For deployment via GHCR, publish both images and run with `docker-compose.ghcr.yml`:
-- Build and push via GitHub Actions (`.github/workflows/ghcr.yml`) or locally:
+-- Build and push via GitHub Actions (`.github/workflows/ghcr.yml`) or locally:
   - Backend: `docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/<OWNER>/reviewsflow-backend:latest ./backend --push`
-  - Frontend: `docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/<OWNER>/reviewsflow-frontend:latest ./frontend --build-arg VITE_API_BASE=http://localhost:8480 --push`
+  - Frontend: `docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/<OWNER>/reviewsflow-frontend:latest ./frontend --push`
 - Run with GHCR images:
   - `set GHCR_OWNER=<OWNER>` (Windows PowerShell) or `export GHCR_OWNER=<OWNER>` (bash)
   - `docker compose -f docker-compose.ghcr.yml up -d`
@@ -79,17 +79,18 @@ If you prefer to pull prebuilt images from GHCR directly:
 
 - Run with Compose using GHCR images (recommended):
   - `docker compose -f docker-compose.ghcr.yml up -d`
-  - Frontend: http://localhost:4380, Backend: http://localhost:8480
+  - Frontend: http://localhost:4380 (public), Backend: internal (proxied by frontend)
+  - Note: Ensure `docker-compose.ghcr.yml` is saved in your current directory. If you didn’t clone the repo, download/save this file locally first, then run the above command from the same directory.
 
 - Or run with plain Docker (advanced):
   - `docker network create reviewsflow-net`
   - Database:
     - `docker run -d --name reviewsflow-db --network reviewsflow-net -e MYSQL_DATABASE=reviews -e MYSQL_USER=reviews -e MYSQL_PASSWORD=reviews -e MYSQL_ROOT_PASSWORD=root -v reviewsflow-db:/var/lib/mysql mysql:8.0 --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci`
   - Backend:
-    - `docker run -d --name reviewsflow-backend --network reviewsflow-net -e DATABASE_URL=mysql+aiomysql://reviews:reviews@reviewsflow-db:3306/reviews -e HEADLESS=true -e ALLOW_REGISTRATIONS=true -p 8480:8000 ghcr.io/lisacek/reviewsflow-backend:latest`
+    - `docker run -d --name reviewsflow-backend --network reviewsflow-net -e DATABASE_URL=mysql+aiomysql://reviews:reviews@reviewsflow-db:3306/reviews -e HEADLESS=true -e ALLOW_REGISTRATIONS=true ghcr.io/lisacek/reviewsflow-backend:latest`
   - Frontend:
     - `docker run -d --name reviewsflow-frontend --network reviewsflow-net -p 4380:80 ghcr.io/lisacek/reviewsflow-frontend:latest`
-    - Note: The frontend image reads `VITE_API_BASE` at build-time. Ensure it was built with `http://localhost:8480` so the browser can reach the backend from your host. If not, rebuild the frontend with `--build-arg VITE_API_BASE=http://localhost:8480` or use the provided compose setup which sets this for local builds.
+    - Note: The frontend image reads `VITE_API_BASE` at build-time. Build it without specifying `VITE_API_BASE` (or leave it empty) so it uses same-origin paths that NGINX proxies to the backend.
 
 NGINX config (`nginx.conf`) serves the SPA with a fallback to `index.html`.
 

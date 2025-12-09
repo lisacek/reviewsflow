@@ -29,15 +29,12 @@ services:
       MAX_PLAYWRIGHT_INSTANCES: 2
     depends_on:
       - db
-    ports:
-      - "8480:8000"
+    # Do not expose backend publicly; frontend proxies /api to backend
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        VITE_API_BASE: http://localhost:8480
     depends_on:
       - backend
     ports:

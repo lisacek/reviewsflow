@@ -18,7 +18,7 @@ services:
       - db_data:/var/lib/mysql
 
   backend:
-    image: ghcr.io/${GHCR_OWNER:-your-gh-username}/reviewsflow-backend:latest
+    image: ghcr.io/lisacek/reviewsflow-backend:latest
     environment:
       DATABASE_URL: mysql+aiomysql://reviews:reviews@db:3306/reviews
       HEADLESS: "true"
@@ -27,11 +27,10 @@ services:
       MAX_PLAYWRIGHT_INSTANCES: 2
     depends_on:
       - db
-    ports:
-      - "8480:8000"
+    # Do not expose backend publicly; frontend proxies /api to backend
 
   frontend:
-    image: ghcr.io/${GHCR_OWNER:-your-gh-username}/reviewsflow-frontend:latest
+    image: ghcr.io/lisacek/reviewsflow-frontend:latest
     depends_on:
       - backend
     environment:
