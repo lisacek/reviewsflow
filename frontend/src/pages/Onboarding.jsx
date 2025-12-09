@@ -1,7 +1,14 @@
 import React, { useEffect, useState } from 'react'
+import { setPageSEO } from '../seo.js'
 import { getDomains, addDomain, deleteDomainById, getInstances, createInstance } from '../api.js'
 
 export default function Onboarding() {
+  useEffect(() => {
+    setPageSEO({
+      title: 'Onboarding — ReviewsFlow',
+      description: 'Configure allowed domains and create review instances to embed on your site.',
+    })
+  }, [])
   const [domains, setDomains] = useState([])
   const [newDomain, setNewDomain] = useState('')
   const [instances, setInstances] = useState([])

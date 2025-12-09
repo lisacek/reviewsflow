@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
     ShieldCheck, Zap, Code2, Globe,
     Layout, Star, ArrowRight, CheckCircle2
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import CodePreviewSection from "../components/CodePreviewSection.jsx";
+import { setPageSEO } from "../seo.js";
 
 // --- ANIMATION VARIANTS ---
 const containerVariants = {
@@ -26,6 +27,12 @@ const itemVariants = {
 };
 
 export default function LandingPage({onLogin, onRegister, authed}) {
+    useEffect(() => {
+        setPageSEO({
+            title: 'ReviewsFlow — Self‑Hosted Reviews Widget',
+            description: 'Build and embed a self‑hosted Google Reviews widget. Own your data, control domains, and avoid monthly SaaS fees.',
+        })
+    }, [])
     return (
 
         <div className="min-h-screen bg-black text-zinc-100 font-sans selection:bg-blue-500/30 relative overflow-hidden">

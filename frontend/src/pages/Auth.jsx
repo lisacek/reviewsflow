@@ -1,9 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Mail, Lock, Loader2, ArrowRight, AlertCircle, Sparkles } from 'lucide-react';
 import { login, register, me } from '../api.js';
 import { saveToken } from '../auth.js';
+import { setPageSEO } from '../seo.js';
 
 export default function AuthPage({ onAuthed, initialMode = 'login' }) {
+  useEffect(() => {
+    setPageSEO({
+      title: 'Login / Register — ReviewsFlow',
+      description: 'Access your ReviewsFlow dashboard to manage domains, instances and embed settings.',
+    })
+  }, [])
   const [mode, setMode] = useState(initialMode); // 'login' | 'register'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

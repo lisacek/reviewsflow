@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# Disallow dev or private routes if any
+Disallow: /admin
+Disallow: /api
+
+Sitemap: /sitemap.xml

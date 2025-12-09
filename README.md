@@ -50,7 +50,7 @@ Environment variables (optional):
 
 ## Building
 - `npm run build` runs two builds:
-  - App build (SPA) → `dist/index.html`, `dist/assets/*`, `dist/vite.svg`.
+  - App build (SPA) → `dist/index.html`, `dist/assets/*`, and favicons.
   - Widget build (via `vite.widget.config.js`) → `dist/widget.js`, `dist/widget.css`.
 
 ## Docker

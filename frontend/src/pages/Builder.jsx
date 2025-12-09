@@ -10,6 +10,7 @@ import {ReviewsWidget} from '../components/ReviewsWidget.jsx';
 import Prism from "prismjs";
 import "prismjs/themes/prism-tomorrow.css";
 import "prismjs/components/prism-markup"; // html
+import { setPageSEO } from "../seo.js";
 
 export default function Builder() {
     // --- STATE ---
@@ -38,6 +39,13 @@ export default function Builder() {
         theme: 'dark',
     });
     const [localeInput, setLocaleInput] = useState('en-US');
+
+    useEffect(() => {
+        setPageSEO({
+            title: 'Builder — ReviewsFlow',
+            description: 'Visually configure your self‑hosted Google Reviews widget and generate the embed code.',
+        })
+    }, [])
 
     // --- INITIAL LOAD ---
     useEffect(() => {

@@ -1,13 +1,20 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   Eye, EyeOff, Copy, Check, Terminal, Key,
   Server, BarChart3, Settings, Globe, Play, ExternalLink
 } from 'lucide-react';
 import { getToken } from '../auth.js';
+import { setPageSEO } from '../seo.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
 export default function ApiDocs() {
+  useEffect(() => {
+    setPageSEO({
+      title: 'API Docs — ReviewsFlow',
+      description: 'Developer reference for ReviewsFlow: endpoints for auth, instances, reviews, stats, cache and more.',
+    })
+  }, [])
   const [revealed, setRevealed] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
   const token = getToken();
