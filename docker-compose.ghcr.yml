@@ -16,9 +16,16 @@ services:
     ]
     volumes:
       - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -proot || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
 
   backend:
     image: ghcr.io/lisacek/reviewsflow-backend:latest
+    restart: unless-stopped
     environment:
       DATABASE_URL: mysql+aiomysql://reviews:reviews@db:3306/reviews
       HEADLESS: "true"
@@ -26,7 +33,8 @@ services:
       WORKER_COUNT: 1
       MAX_PLAYWRIGHT_INSTANCES: 2
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     # Do not expose backend publicly; frontend proxies /api to backend
 
   frontend:
