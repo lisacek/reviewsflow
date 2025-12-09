@@ -4,7 +4,7 @@ A Vite + React frontend that includes:
 - A builder UI to configure your review widget.
 - A lightweight embeddable widget (`widget.js` + `widget.css`) that fetches public reviews from your backend.
 
-The widget reads settings from data attributes and calls your backend public endpoint: `GET /public/reviews/{PUBLIC_KEY}`.
+The widget reads settings from data attributes and calls your backend public endpoint: `GET /public/reviews/{PUBLIC_KEY}`
 
 ## Quick Start (Frontend)
 - Requirements: Node 18+ and npm.
