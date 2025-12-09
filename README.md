@@ -7,7 +7,7 @@ A Vite + React frontend that includes:
 The widget reads settings from data attributes and calls your backend public endpoint: `GET /public/reviews/{PUBLIC_KEY}`
 
 ## Quick Start (Frontend)
-- Requirements: Node 18+ and npm.
+- Requirements: Node 20.19+ or 22.12+ and npm.
 - `cd frontend`
 - Install: `npm ci`
 - Dev server: `npm run dev` (opens on http://localhost:5173)
