@@ -147,3 +147,27 @@ class InstanceOut(BaseModel):
     active: bool
     domain_id: Optional[int]
 
+
+# Moderation models
+class ReviewModeration(BaseModel):
+    locale: str
+    reviewId: str
+    name: str
+    date: str
+    stars: float
+    text: str
+    avatar: str
+    profileLink: str
+    hidden: bool
+
+
+class ReviewHideRequest(BaseModel):
+    locale: str
+    reviewId: str
+    hidden: bool = True
+
+
+class ReviewDeleteRequest(BaseModel):
+    locale: str
+    reviewId: str
+

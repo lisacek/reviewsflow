@@ -25,8 +25,8 @@ async def warm_instance(instance_id: int):
                 db,
                 inst.place_url,
                 locales or ["en-US"],
-                inst.min_rating,
-                inst.max_reviews,
+                1.0,            # scrape generously
+                0,              # collect-all
                 inst.sort,
             )
             inst.last_run = datetime.now(timezone.utc)
@@ -62,8 +62,8 @@ async def monitor_loop():
                             db,
                             m.place_url,
                             locales or list(LOCALES.keys()),
-                            m.min_rating,
-                            m.max_reviews,
+                            1.0,
+                            0,
                             m.sort,
                         )
                         m.last_run = datetime.now(timezone.utc)
@@ -91,8 +91,8 @@ async def monitor_loop():
                             db,
                             inst.place_url,
                             locales or list(LOCALES.keys()),
-                            inst.min_rating,
-                            inst.max_reviews,
+                            1.0,
+                            0,
                             inst.sort,
                         )
                         inst.last_run = datetime.now(timezone.utc)
@@ -102,4 +102,25 @@ async def monitor_loop():
             # continue loop on errors
             pass
         await asyncio.sleep(settings.MONITOR_POLL_SECONDS)
+
+
+async def _retry_scrape_loop(place_url: str, locales: list[str], delay_seconds: int = 300):
+    while True:
+        try:
+            async with AsyncSessionLocal() as db:
+                await force_refresh_locales(db, place_url, locales, 1.0, 0, "newest")
+            print(f"[RETRY] Success scraping place={place_url} locales={locales}")
+            return
+        except Exception as e:
+            # Keep retrying on any error after delay
+            print(f"[RETRY] Failed scrape place={place_url} err={e}. Retrying in {delay_seconds}s")
+        await asyncio.sleep(delay_seconds)
+
+
+def schedule_rescrape(place_url: str, locales: list[str], delay_seconds: int = 300):
+    try:
+        asyncio.create_task(_retry_scrape_loop(place_url, locales, delay_seconds))
+        print(f"[RETRY] Scheduled rescrape in {delay_seconds}s for place={place_url} locales={locales}")
+    except Exception:
+        pass
 

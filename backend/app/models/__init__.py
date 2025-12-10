@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Boolean, ForeignKey, UniqueConstraint, Index, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db import Base
@@ -62,4 +62,27 @@ class ReviewInstance(Base):
     sort = Column(String(10), default="newest")
     active = Column(Boolean, default=True)
     last_run = Column(DateTime(timezone=True), server_default=None, onupdate=func.now())
+
+
+# New table to persist individual reviews per (place_url, locale)
+class ReviewEntry(Base):
+    __tablename__ = "reviews"
+
+    id = Column(Integer, primary_key=True)
+    place_url = Column(String(1024), index=True, nullable=False)
+    locale = Column(String(10), index=True, nullable=False)
+    review_id = Column(String(128), nullable=False)
+    name = Column(String(255), default="")
+    date = Column(String(64), default="")  # raw date string as scraped
+    stars = Column(Float, default=0.0)
+    text = Column(Text, default="")
+    avatar = Column(String(1024), default="")
+    profile_link = Column(String(1024), default="")
+    scraped_at = Column(DateTime(timezone=True), server_default=func.now())
+    hidden = Column(Boolean, default=False, index=True)
+
+    __table_args__ = (
+        UniqueConstraint("place_url", "locale", "review_id", name="uq_review_place_locale_id"),
+        Index("ix_reviews_place_locale", "place_url", "locale"),
+    )
 

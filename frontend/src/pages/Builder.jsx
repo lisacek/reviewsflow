@@ -219,7 +219,7 @@ export default function Builder() {
 
     function getSnippetCode() {
         const origin = typeof window !== 'undefined' ? window.location.origin : '';
-        const apiBase = import.meta.env.VITE_API_BASE || '';
+        const apiBase = import.meta.env.VITE_API_BASE || window.location.origin;
         const publicKey = generatedInstance?.public_key || 'YOUR_PUBLIC_KEY';
         return `<div id="reviews-widget"></div>
 

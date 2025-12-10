@@ -23,6 +23,7 @@ from app.api import domains as api_domains
 from app.api import instances as api_instances
 from app.api import stats as api_stats
 from app.api import private as api_private
+from app.api import admin as api_admin
 from app.tasks import monitor_loop
 
 
@@ -75,6 +76,16 @@ async def add_request_id_and_handle_errors(request: Request, call_next):
             ScrapeError = None  # type: ignore
 
         if ScrapeError is not None and isinstance(ex, ScrapeError):
+            # If it's the specific panel-not-found case, schedule a retry in 5 minutes
+            try:
+                if isinstance(ex.message, str) and ex.message.startswith("Could not locate reviews panel"):
+                    from app.tasks import schedule_rescrape
+                    place = getattr(ex, "place_url", None)
+                    loc = getattr(ex, "locale", None)
+                    if place and loc:
+                        schedule_rescrape(str(place), [str(loc)], delay_seconds=300)
+            except Exception:
+                pass
             payload = {
                 "success": False,
                 "error": {
@@ -164,4 +175,5 @@ app.include_router(api_domains.router)
 app.include_router(api_instances.router)
 app.include_router(api_stats.router)
 app.include_router(api_private.router)
+app.include_router(api_admin.router)
 

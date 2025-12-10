@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from app.models import ReviewCache
+from sqlalchemy import select, insert
+from app.models import ReviewCache, ReviewEntry
 from app.scraper import scrape
 from app.locales import LOCALES
 from app.config import settings
@@ -8,6 +8,94 @@ from datetime import datetime, timedelta, timezone
 import asyncio
 
 _SCRAPE_SEM = asyncio.Semaphore(max(1, int(getattr(settings, "MAX_PLAYWRIGHT_INSTANCES", 2))))
+
+# Temporary: force serving reviews from earliest added -> newest added, regardless of requested sort
+FORCE_OLDEST_ORDER = True
+
+# Per-key lock to avoid concurrent scrapes for the same (place_url, locale)
+_SCRAPE_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def _scrape_key(place_url: str, locale: str) -> str:
+    return f"{place_url}::{locale}"
+
+
+def _get_lock(key: str) -> asyncio.Lock:
+    lk = _SCRAPE_LOCKS.get(key)
+    if lk is None:
+        lk = asyncio.Lock()
+        _SCRAPE_LOCKS[key] = lk
+    return lk
+
+
+async def _build_payload_from_db(db: AsyncSession, place_url: str, locale: str, min_rating: float, max_reviews: int | None, sort: str, initial_seed: bool = False) -> dict:
+    # Temporary behavior: always serve from earliest added to newest (oldest first)
+    if FORCE_OLDEST_ORDER:
+        order = [ReviewEntry.scraped_at.asc(), ReviewEntry.id.asc()]
+    else:
+        # Original behavior: newest first except initial seed for newest
+        if sort == "newest" and initial_seed:
+            order = [ReviewEntry.scraped_at.asc(), ReviewEntry.id.asc()]
+        else:
+            order = [ReviewEntry.scraped_at.desc(), ReviewEntry.id.desc()]
+    q = await db.execute(
+        select(ReviewEntry)
+        .where(ReviewEntry.place_url == place_url, ReviewEntry.locale == locale)
+        .order_by(*order)
+    )
+    rows = q.scalars().all()
+    try:
+        print(f"[DB] Found {len(rows)} stored reviews for place={place_url} locale={locale}")
+    except Exception:
+        pass
+    items = []
+    for r in rows:
+        # Skip hidden items
+        try:
+            if getattr(r, 'hidden', False):
+                continue
+        except Exception:
+            pass
+        try:
+            if r.stars is not None and float(r.stars) < float(min_rating):
+                continue
+        except Exception:
+            pass
+        items.append({
+            "reviewId": r.review_id,
+            "name": r.name or "",
+            "date": r.date or "",
+            "stars": float(r.stars or 0.0),
+            "text": r.text or "",
+            "avatar": r.avatar or "",
+            "profileLink": r.profile_link or "",
+        })
+    if not FORCE_OLDEST_ORDER:
+        if sort == "best":
+            items.sort(key=lambda x: x["stars"], reverse=True)
+        elif sort == "worst":
+            items.sort(key=lambda x: x["stars"]) 
+        elif sort == "oldest":
+            items = list(reversed(items))
+    if max_reviews and int(max_reviews) > 0:
+        items = items[: int(max_reviews)]
+    avg = round((sum(x["stars"] for x in items) / max(len(items), 1)), 2) if items else 0.0
+    try:
+        print(f"[DB] Serving {len(items)} reviews (min={min_rating}, max={max_reviews}, sort={sort}) for place={place_url} locale={locale}")
+    except Exception:
+        pass
+    return {
+        "success": True,
+        "locale": locale,
+        "count": len(items),
+        "averageRating": avg,
+        "reviews": items,
+        "params": {
+            "min_rating": float(min_rating),
+            "max_reviews": int(max_reviews) if (max_reviews is not None and int(max_reviews) > 0) else 0,
+            "sort": str(sort),
+        },
+    }
 
 
 async def get_or_scrape(
@@ -21,223 +109,111 @@ async def get_or_scrape(
 ):
     place_url_str = str(place_url)
 
+    # TTL marker from ReviewCache
     q = await db.execute(
         select(ReviewCache)
         .where(ReviewCache.place_url == place_url_str, ReviewCache.locale == locale)
         .order_by(ReviewCache.updated_at.desc(), ReviewCache.id.desc())
     )
     cached = q.scalars().first()
-
-    if cached and not force:
-        # Determine if cached payload can satisfy current request (allow supersets)
-        def _satisfies_request(p: dict) -> tuple[bool, dict]:
-            try:
-                params = p.get("params", {}) if isinstance(p, dict) else {}
-                if not params:
-                    return False, {}
-                if params.get("sort") != sort:
-                    return False, params
-                try:
-                    cached_min = float(params.get("min_rating", 1.0))
-                    req_min = float(min_rating)
-                    # Superset rule: cached_min must be <= requested_min
-                    if cached_min > req_min:
-                        return False, params
-                except Exception:
-                    return False, params
-                try:
-                    # Cached can satisfy if it has at least as many as requested (0 means infinite)
-                    def _norm(v):
-                        try:
-                            iv = int(v)
-                            return float('inf') if iv <= 0 else iv
-                        except Exception:
-                            return 0
-                    cached_max = _norm(params.get("max_reviews", 0))
-                    req_max = _norm(max_reviews if max_reviews is not None else 0)
-                    if cached_max < req_max:
-                        return False, params
-                except Exception:
-                    return False, params
-                return True, params
-            except Exception:
-                return False, {}
-
-        needs_refresh = False
-        # TTL check with robust timezone handling
-        now = datetime.now(timezone.utc)
-        updated = cached.updated_at
-        if updated is None:
+    needs_refresh = force
+    now = datetime.now(timezone.utc)
+    initial_seed = False
+    if not needs_refresh:
+        if not cached or cached.updated_at is None:
             needs_refresh = True
-            print(f"[CACHE] MISS reason=missing_updated_at locale={locale}")
+            initial_seed = True
         else:
             try:
-                if updated.tzinfo is None:
-                    # Treat naive as UTC
-                    updated_cmp = updated.replace(tzinfo=timezone.utc)
-                else:
-                    updated_cmp = updated
-                age = (now - updated_cmp)
-                if age > timedelta(minutes=settings.CACHE_TTL_MINUTES):
+                updated_cmp = cached.updated_at.replace(tzinfo=timezone.utc) if cached.updated_at.tzinfo is None else cached.updated_at
+                if (now - updated_cmp) > timedelta(minutes=settings.CACHE_TTL_MINUTES):
                     needs_refresh = True
-                    print(f"[CACHE] STALE age_minutes={int(age.total_seconds()/60)} ttl={settings.CACHE_TTL_MINUTES} locale={locale}")
             except Exception:
-                # On any issue comparing, do not force refresh unnecessarily; assume fresh
                 needs_refresh = False
 
-        sat, cparams = _satisfies_request(cached.payload)
-        if not sat:
-            needs_refresh = True
-            print(f"[CACHE] PARAM_MISMATCH locale={locale} want sort={sort} min_rating={min_rating} max_reviews={max_reviews} got={cparams}")
-
-        if needs_refresh:
-            print(f"[CACHE] REFRESH locale={locale} place={place_url_str}")
-            async with _SCRAPE_SEM:
-                reviews = await scrape(
-                    place_url_str,
-                    locale,
-                    LOCALES[locale],
-                    min_rating,
-                    max_reviews,
-                    sort,
-                )
-            payload = {
-                "success": True,
-                "locale": locale,
-                "count": len(reviews),
-                "averageRating": round(
-                    sum(r["stars"] for r in reviews) / max(len(reviews), 1), 2
-                ),
-                "reviews": reviews,
-                "params": {
-                    "min_rating": float(min_rating),
-                    "max_reviews": int(max_reviews) if (max_reviews is not None and int(max_reviews) > 0) else 0,
-                    "sort": str(sort),
-                },
-            }
-            # Upsert by (place_url, locale) without relying on merge to avoid duplicates
-            existing_q = await db.execute(
+    if needs_refresh:
+        key = _scrape_key(place_url_str, locale)
+        lock = _get_lock(key)
+        if lock.locked():
+            try:
+                print(f"[LOCK] waiting key={key}")
+            except Exception:
+                pass
+        async with lock:
+            try:
+                print(f"[LOCK] acquired key={key}")
+            except Exception:
+                pass
+            # Double-check TTL after acquiring lock
+            q2 = await db.execute(
                 select(ReviewCache)
                 .where(ReviewCache.place_url == place_url_str, ReviewCache.locale == locale)
                 .order_by(ReviewCache.updated_at.desc(), ReviewCache.id.desc())
             )
-            existing = existing_q.scalars().first()
-            if existing:
-                existing.payload = payload
-                existing.avg_rating = payload["averageRating"]
-                existing.updated_at = datetime.now(timezone.utc)
-                db.add(existing)
+            cached2 = q2.scalars().first()
+            still_refresh = True
+            if cached2 and cached2.updated_at is not None:
+                try:
+                    updated_cmp2 = cached2.updated_at.replace(tzinfo=timezone.utc) if cached2.updated_at.tzinfo is None else cached2.updated_at
+                    still_refresh = (now - updated_cmp2) > timedelta(minutes=settings.CACHE_TTL_MINUTES)
+                except Exception:
+                    still_refresh = False
+            if not force and not still_refresh:
+                try:
+                    print(f"[LOCK] skip scrape; cache fresh key={key}")
+                except Exception:
+                    pass
             else:
-                db.add(
-                    ReviewCache(
+                async with _SCRAPE_SEM:
+                    new_reviews = await scrape(
+                        place_url_str,
+                        locale,
+                        LOCALES[locale],
+                        1.0,
+                        0,
+                        sort,
+                    )
+                try:
+                    print(f"[SCRAPER] Collected {len(new_reviews)} reviews for place={place_url_str} locale={locale}")
+                except Exception:
+                    pass
+                # Insert unique
+                existing_q = await db.execute(
+                    select(ReviewEntry.review_id).where(ReviewEntry.place_url == place_url_str, ReviewEntry.locale == locale)
+                )
+                existing_ids = set(existing_q.scalars().all())
+                to_add = []
+                for r in new_reviews:
+                    rid = str(r.get("reviewId") or "")
+                    if not rid or rid in existing_ids:
+                        continue
+                    entry = ReviewEntry(
                         place_url=place_url_str,
                         locale=locale,
-                        payload=payload,
-                        avg_rating=payload["averageRating"],
-                        updated_at=datetime.now(timezone.utc),
+                        review_id=rid,
+                        name=r.get("name") or "",
+                        date=r.get("date") or "",
+                        stars=float(r.get("stars") or 0.0),
+                        text=r.get("text") or "",
+                        avatar=r.get("avatar") or "",
+                        profile_link=r.get("profileLink") or "",
+                        scraped_at=now,
                     )
-                )
-            await db.commit()
-            return payload
-
-        print(f"[CACHE] HIT locale={locale} place={place_url_str}")
-        # If cached is a superset, derive filtered/sliced view for requested params
-        try:
-            payload = cached.payload if isinstance(cached.payload, dict) else {}
-            cparams = payload.get("params", {}) if isinstance(payload.get("params"), dict) else {}
-            # Exact param match -> return as-is
-            try:
-                req_max_i = int(max_reviews) if (max_reviews is not None and int(max_reviews) > 0) else 0
-                exact = (
-                    cparams.get("sort") == str(sort)
-                    and float(cparams.get("min_rating", 1.0)) == float(min_rating)
-                    and int(cparams.get("max_reviews", 0)) == req_max_i
-                )
-            except Exception:
-                exact = False
-            if exact:
-                return payload
-
-            reviews = payload.get("reviews") or []
-            try:
-                filtered = [r for r in reviews if float(r.get("stars", 0)) >= float(min_rating)]
-            except Exception:
-                filtered = reviews
-            try:
-                if req_max_i and req_max_i > 0:
-                    trimmed = list(filtered)[: req_max_i]
+                    to_add.append(entry)
+                if to_add:
+                    db.add_all(to_add)
+                    try:
+                        print(f"[DB] Inserted {len(to_add)} new reviews for place={place_url_str} locale={locale}")
+                    except Exception:
+                        pass
+                if cached2:
+                    cached2.updated_at = now
+                    db.add(cached2)
                 else:
-                    trimmed = list(filtered)
-            except Exception:
-                trimmed = list(filtered)
-            avg = round((sum((r.get("stars") or 0) for r in trimmed) / max(len(trimmed), 1)), 2) if trimmed else 0.0
-            derived = {
-                "success": True,
-                "locale": payload.get("locale", locale),
-                "count": len(trimmed),
-                "averageRating": avg,
-                "reviews": trimmed,
-                "params": {
-                    "min_rating": float(min_rating),
-                    "max_reviews": int(max_reviews) if (max_reviews is not None and int(max_reviews) > 0) else 0,
-                    "sort": str(sort),
-                },
-            }
-            print(f"[CACHE] DERIVED locale={locale} from params={cparams} -> min={min_rating} max={max_reviews} sort={sort}")
-            return derived
-        except Exception:
-            return cached.payload
+                    db.add(ReviewCache(place_url=place_url_str, locale=locale, payload={}, avg_rating=0.0, updated_at=now))
+                await db.commit()
 
-    print(f"[CACHE] COLD_MISS locale={locale} place={place_url_str}")
-    async with _SCRAPE_SEM:
-        reviews = await scrape(
-            place_url_str,
-            locale,
-            LOCALES[locale],
-            min_rating,
-            max_reviews,
-            sort,
-        )
-
-    payload = {
-        "success": True,
-        "locale": locale,
-        "count": len(reviews),
-        "averageRating": round(
-            sum(r["stars"] for r in reviews) / max(len(reviews), 1), 2
-        ),
-        "reviews": reviews,
-                "params": {
-                    "min_rating": float(min_rating),
-                    "max_reviews": req_max_i,
-                    "sort": str(sort),
-                },
-    }
-
-    # Upsert by (place_url, locale)
-    existing_q = await db.execute(
-        select(ReviewCache)
-        .where(ReviewCache.place_url == place_url_str, ReviewCache.locale == locale)
-        .order_by(ReviewCache.updated_at.desc(), ReviewCache.id.desc())
-    )
-    existing = existing_q.scalars().first()
-    if existing:
-        existing.payload = payload
-        existing.avg_rating = payload["averageRating"]
-        existing.updated_at = datetime.now(timezone.utc)
-        db.add(existing)
-    else:
-        db.add(
-            ReviewCache(
-                place_url=place_url_str,
-                locale=locale,
-                payload=payload,
-                avg_rating=payload["averageRating"],
-                updated_at=datetime.now(timezone.utc),
-            )
-        )
-    await db.commit()
-    return payload
+    return await _build_payload_from_db(db, place_url_str, locale, min_rating, max_reviews, sort, initial_seed=initial_seed)
 
 
 async def force_refresh_locales(
@@ -256,11 +232,10 @@ async def force_refresh_locales(
             db,
             place_url,
             loc,
-            True,  # force
+            True,
             min_rating,
             max_reviews,
             sort,
         )
         results.append(payload)
     return results
-

@@ -7,10 +7,12 @@ from app.config import settings
 
 
 class ScrapeError(Exception):
-    def __init__(self, message: str, screenshot: str | None = None):
+    def __init__(self, message: str, screenshot: str | None = None, place_url: str | None = None, locale: str | None = None):
         super().__init__(message)
         self.message = message
         self.screenshot = screenshot
+        self.place_url = place_url
+        self.locale = locale
 
 
 PANEL_SELECTOR = "div.m6QErb.XiKgde.kA9KIf.dS8AEf.XiKgde"
@@ -96,22 +98,12 @@ def _scrape_sync(
             try:
                 page.wait_for_selector(PANEL_SELECTOR, timeout=30000)
             except Exception as e:
-                screenshots_dir = os.path.join(os.getcwd(), "screenshots")
-                os.makedirs(screenshots_dir, exist_ok=True)
-                ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-                filename = f"no-panel-{locale}-{ts}.png"
-                screenshot_path = os.path.join(screenshots_dir, filename)
-                try:
-                    page.screenshot(path=screenshot_path, full_page=True)
-                except Exception:
-                    screenshot_path = None
                 msg = (
                     "Could not locate reviews panel on the page. "
                     "The site structure may have changed or content failed to load."
                 )
-                rel = os.path.join("screenshots", filename) if screenshot_path else None
-                print(f"[SCRAPER] ERROR {locale}: {msg} | screenshot={rel}")
-                raise ScrapeError(msg, screenshot=rel) from e
+                print(f"[SCRAPER] ERROR {locale}: {msg}")
+                raise ScrapeError(msg, screenshot=None, place_url=place_url, locale=locale) from e
 
             # Aggressive scroll until card growth stalls; aim to exceed desired count by a buffer
             panel = PANEL_SELECTOR
@@ -184,21 +176,10 @@ def _scrape_sync(
             # Already handled with screenshot and message; rethrow
             raise
         except Exception as e:
-            # Generic failure: capture page screenshot for debugging
-            try:
-                screenshots_dir = os.path.join(os.getcwd(), "screenshots")
-                os.makedirs(screenshots_dir, exist_ok=True)
-                ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-                filename = f"error-{locale}-{ts}.png"
-                screenshot_path = os.path.join(screenshots_dir, filename)
-                if page is not None:
-                    page.screenshot(path=screenshot_path, full_page=True)
-            except Exception:
-                screenshot_path = None
+            # Generic failure without saving screenshots
             msg = f"Failed to scrape reviews: {str(e)}"
-            rel = os.path.join("screenshots", filename) if screenshot_path else None
-            print(f"[SCRAPER] ERROR {locale}: {msg} | screenshot={rel}")
-            raise ScrapeError(msg, screenshot=rel) from e
+            print(f"[SCRAPER] ERROR {locale}: {msg}")
+            raise ScrapeError(msg, screenshot=None, place_url=place_url, locale=locale) from e
         finally:
             try:
                 if context is not None:

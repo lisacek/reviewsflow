@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from app.schemas import ReviewsResponse, StatsResponse
+from sqlalchemy import select, update, delete
+from app.schemas import ReviewsResponse, StatsResponse, ReviewModeration, ReviewHideRequest, ReviewDeleteRequest
 from app.db import get_db
-from app.models import ReviewInstance, User
+from app.models import ReviewInstance, User, ReviewEntry
 from app.auth import get_current_user
 from app.service import get_or_scrape
 from app.locales import LOCALES
@@ -114,4 +114,110 @@ async def api_stats(
         filteredCount=filtered_count,
         filteredAverage=filtered_avg,
     )
+
+
+@router.get("/reviews/{instance_id}/items", response_model=list[ReviewModeration])
+async def list_review_items(
+    instance_id: int,
+    locale: str | None = None,
+    include_hidden: bool = False,
+    offset: int = 0,
+    limit: int = 100,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    res = await db.execute(
+        select(ReviewInstance).where(
+            ReviewInstance.id == instance_id,
+            ReviewInstance.user_id == user.id,
+            ReviewInstance.active == True,
+        )
+    )
+    inst = res.scalars().first()
+    if not inst:
+        raise HTTPException(status_code=404, detail="Instance not found")
+
+    loc = locale or (inst.locales[0] if (inst.locales or []) else None) or "en-US"
+    q = select(ReviewEntry).where(ReviewEntry.place_url == inst.place_url, ReviewEntry.locale == loc)
+    if not include_hidden:
+        q = q.where(ReviewEntry.hidden == False)
+    q = q.order_by(ReviewEntry.scraped_at.asc(), ReviewEntry.id.asc()).offset(max(0, int(offset))).limit(max(1, int(limit)))
+    res = await db.execute(q)
+    rows = res.scalars().all()
+    out: list[ReviewModeration] = []
+    for r in rows:
+        out.append(
+            ReviewModeration(
+                locale=r.locale,
+                reviewId=r.review_id,
+                name=r.name or "",
+                date=r.date or "",
+                stars=float(r.stars or 0.0),
+                text=r.text or "",
+                avatar=r.avatar or "",
+                profileLink=r.profile_link or "",
+                hidden=bool(r.hidden),
+            )
+        )
+    return out
+
+
+@router.post("/reviews/{instance_id}/hide")
+async def hide_review_item(
+    instance_id: int,
+    body: ReviewHideRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    res = await db.execute(
+        select(ReviewInstance).where(
+            ReviewInstance.id == instance_id,
+            ReviewInstance.user_id == user.id,
+            ReviewInstance.active == True,
+        )
+    )
+    inst = res.scalars().first()
+    if not inst:
+        raise HTTPException(status_code=404, detail="Instance not found")
+
+    stmt = (
+        update(ReviewEntry)
+        .where(
+            ReviewEntry.place_url == inst.place_url,
+            ReviewEntry.locale == body.locale,
+            ReviewEntry.review_id == body.reviewId,
+        )
+        .values(hidden=bool(body.hidden))
+    )
+    await db.execute(stmt)
+    await db.commit()
+    return {"success": True}
+
+
+@router.delete("/reviews/{instance_id}/item")
+async def delete_review_item(
+    instance_id: int,
+    body: ReviewDeleteRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    res = await db.execute(
+        select(ReviewInstance).where(
+            ReviewInstance.id == instance_id,
+            ReviewInstance.user_id == user.id,
+            ReviewInstance.active == True,
+        )
+    )
+    inst = res.scalars().first()
+    if not inst:
+        raise HTTPException(status_code=404, detail="Instance not found")
+
+    stmt = delete(ReviewEntry).where(
+        ReviewEntry.place_url == inst.place_url,
+        ReviewEntry.locale == body.locale,
+        ReviewEntry.review_id == body.reviewId,
+    )
+    await db.execute(stmt)
+    await db.commit()
+    return {"success": True}
 
