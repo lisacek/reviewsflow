@@ -155,6 +155,12 @@ export default function LandingPage({onLogin, onRegister, authed}) {
                     <span className="font-bold text-xl tracking-tight text-zinc-100">Review<span className="text-zinc-500">Flow</span></span>
                 </div>
                 <p className="text-zinc-500 text-sm">&copy; {new Date().getFullYear()} Self-Hosted Solutions. Open Source MIT License.</p>
+                <div className="mt-3 flex items-center justify-center gap-3 font-bold text-zinc-100">
+                    <a href="https://github.com/lisacek/reviewsflow" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+                        <Github className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">View on GitHub</span>
+                    </a>
+                </div>
             </footer>
         </div>
     );
