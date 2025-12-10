@@ -56,6 +56,7 @@ export const   ReviewsWidget = ({
                                 maxReviews = 20, // Default higher to allow load more
                                 sort = 'newest',
                                 theme = 'dark',
+                                design = 'grid',
                                 locale,
                                 publicKey = null,
                                 instanceId = null
@@ -260,38 +261,101 @@ export const   ReviewsWidget = ({
   const displayedReviews = allReviews.slice(0, visibleCount)
   const hasMore = visibleCount < allReviews.length
 
+  const Header = (
+    <div className="text-center mb-8">
+      <h2 className="text-2xl font-bold mb-2">Customer Reviews</h2>
+      <div className="flex items-center justify-center gap-2">
+        <span className="text-3xl font-bold">{(stats?.averageRating ?? data.averageRating)}</span>
+        <StarRating rating={Math.round(data.averageRating)} />
+        <span className="text-sm opacity-60">({(stats?.totalCount ?? data.count)} reviews)</span>
+      </div>
+    </div>
+  )
+
+  const ReviewCard = (review) => (
+    <div key={review.reviewId || Math.random()} className={`p-4 rounded-xl border ${borderColor} ${cardBg} shadow-sm transition-all duration-300`}>
+      <div className="flex items-center gap-3 mb-3">
+        <img src={review.avatar || "https://www.gravatar.com/avatar/?d=mp"} alt={review.name} className="w-10 h-10 rounded-full object-cover" />
+        <div>
+          <h4 className="font-semibold text-sm">{review.name}</h4>
+          <p className="text-xs opacity-60">{review.date}</p>
+        </div>
+        <div className="ml-auto">
+          <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/Google_Favicon_2025.svg/960px-Google_Favicon_2025.svg.png" className="w-4 h-4 opacity-80" alt="Google" />
+        </div>
+      </div>
+      <StarRating rating={review.stars} className="mb-2" />
+      <p className="text-sm opacity-80 leading-relaxed line-clamp-4">{review.text}</p>
+    </div>
+  )
+
+  const renderGrid = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {displayedReviews.map((review) => ReviewCard(review))}
+    </div>
+  )
+
+  const renderList = () => (
+    <div className="flex flex-col gap-4">
+      {displayedReviews.map((review) => (
+        <div key={review.reviewId || Math.random()} className={`p-5 rounded-xl border ${borderColor} ${cardBg} shadow-sm w-full`}>
+          <div className="flex items-start gap-4">
+            <img src={review.avatar || "https://www.gravatar.com/avatar/?d=mp"} alt={review.name} className="w-12 h-12 rounded-full object-cover" />
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <h4 className="font-semibold text-sm">{review.name}</h4>
+                <span className="text-xs opacity-60">{review.date}</span>
+              </div>
+              <StarRating rating={review.stars} className="my-1" />
+              <p className="text-sm opacity-80 leading-relaxed">{review.text}</p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+
+  const renderCarousel = () => (
+    <div className="overflow-x-auto">
+      <div className="flex gap-4 pr-2">
+        {displayedReviews.map((review) => (
+          <div key={review.reviewId || Math.random()} className={`min-w-[280px] max-w-[320px] ${cardBg} border ${borderColor} rounded-xl p-4 shrink-0`}> 
+            {ReviewCard(review)}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+
+  const renderBadge = () => (
+    <div className={`flex items-center justify-between ${cardBg} border ${borderColor} rounded-xl p-4`}> 
+      <div className="flex items-center gap-3">
+        <span className="text-3xl font-bold">{(stats?.averageRating ?? data.averageRating)}</span>
+        <div>
+          <StarRating rating={Math.round(data.averageRating)} />
+          <div className="text-xs opacity-60">{(stats?.totalCount ?? data.count)} reviews</div>
+        </div>
+      </div>
+      <div className="text-xs opacity-60">Powered by Google</div>
+    </div>
+  )
+
+  const renderByDesign = () => {
+    switch (design) {
+      case 'list': return renderList()
+      case 'carousel': return renderCarousel()
+      case 'badge': return renderBadge()
+      case 'grid':
+      default: return renderGrid()
+    }
+  }
+
   return (
       <div className={`w-full h-full p-6 transition-colors duration-300 ${bgColor} ${textColor} overflow-y-auto rounded-xl border ${borderColor}`}>
         <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold mb-2">Customer Reviews</h2>
-          <div className="flex items-center justify-center gap-2">
-            <span className="text-3xl font-bold">{(stats?.averageRating ?? data.averageRating)}</span>
-            <StarRating rating={Math.round(data.averageRating)} />
-            <span className="text-sm opacity-60">({(stats?.totalCount ?? data.count)} reviews)</span>
-          </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {displayedReviews.map((review) => (
-                <div key={review.reviewId || Math.random()} className={`p-4 rounded-xl border ${borderColor} ${cardBg} shadow-sm transition-all duration-300`}>
-                  <div className="flex items-center gap-3 mb-3">
-                    <img src={review.avatar || "https://www.gravatar.com/avatar/?d=mp"} alt={review.name} className="w-10 h-10 rounded-full object-cover" />
-                    <div>
-                      <h4 className="font-semibold text-sm">{review.name}</h4>
-                      <p className="text-xs opacity-60">{review.date}</p>
-                    </div>
-                    <div className="ml-auto">
-                      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/Google_Favicon_2025.svg/960px-Google_Favicon_2025.svg.png" className="w-4 h-4 opacity-80" alt="Google" />
-                    </div>
-                  </div>
-                  <StarRating rating={review.stars} className="mb-2" />
-                  <p className="text-sm opacity-80 leading-relaxed line-clamp-4">{review.text}</p>
-                </div>
-            ))}
-          </div>
-
-          {hasMore && (
+          {design !== 'badge' && Header}
+          {renderByDesign()}
+          {hasMore && design !== 'badge' && (
               <div className="mt-8 text-center">
                 <button
                     onClick={handleLoadMore}

@@ -30,6 +30,8 @@ function mount() {
   const minRating = parseFloat(s.getAttribute('data-min-rating') || '4')
   const maxReviews = parseInt(s.getAttribute('data-max-reviews') || '6', 10)
   const sort = s.getAttribute('data-sort') || 'newest'
+  const theme = s.getAttribute('data-theme') || 'dark'
+  const design = s.getAttribute('data-design') || 'grid'
   const target = ensureTarget(s)
 
   const root = createRoot(target)
@@ -40,6 +42,8 @@ function mount() {
       minRating={minRating}
       maxReviews={maxReviews}
       sort={sort}
+      theme={theme}
+      design={design}
     />
   )
 }

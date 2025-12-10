@@ -59,7 +59,8 @@ export default function CodePreviewSection() {
                         <pre className="font-mono text-sm leading-relaxed text-zinc-400">
                             <span className="text-blue-400">&lt;script</span> <span className="text-purple-400">src</span>=<span className="text-green-400">"https://api.yoursite.com/widget.js"</span><br/>
                             &nbsp;&nbsp;<span className="text-purple-400">data-instance</span>=<span className="text-green-400">"public_key_e5698a..."</span><br/>
-                            &nbsp;&nbsp;<span className="text-purple-400">data-theme</span>=<span className="text-green-400">"dark"</span><span className="text-blue-400">&gt;</span><span className="text-blue-400">&lt;/script&gt;</span>
+                            &nbsp;&nbsp;<span className="text-purple-400">data-theme</span>=<span className="text-green-400">"dark"</span><br/>
+                            &nbsp;&nbsp;<span className="text-purple-400">data-design</span>=<span className="text-green-400">"grid"</span><span className="text-blue-400">&gt;</span><span className="text-blue-400">&lt;/script&gt;</span>
                         </pre>
                     </div>
                 </div>

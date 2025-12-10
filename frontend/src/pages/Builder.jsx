@@ -38,6 +38,7 @@ export default function Builder() {
         maxReviews: 6,
         sort: 'newest',
         theme: 'dark',
+        design: 'grid',
     });
     const [localeInput, setLocaleInput] = useState('en-US');
 
@@ -87,6 +88,7 @@ export default function Builder() {
                 maxReviews: 6,
                 sort: 'newest',
                 theme: 'dark',
+                design: 'grid',
             });
             setLocaleInput('en-US');
         } else {
@@ -103,6 +105,7 @@ export default function Builder() {
                     maxReviews: inst.max_reviews,
                     sort: inst.sort,
                     theme: 'dark', // API doesn't store theme yet, default to dark
+                    design: 'grid', // Not stored in API yet
                 });
                 setLocaleInput((inst.locales || []).join(', '));
             }
@@ -231,7 +234,7 @@ export default function Builder() {
 <script src=\"${origin}/widget.js\"
   data-api-base=\"${apiBase}\"
   data-instance=\"${publicKey}\"
-  data-theme=\"${config.theme}\"
+  data-theme=\"${config.theme}\"  data-design=\"${config.design}\"
 ></script>`;
     }
 
@@ -393,6 +396,24 @@ export default function Builder() {
                                     </button>
                                 ))}
                             </div>
+                            <div className="mt-4">
+                                <label className={labelClass}>Design</label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {['grid','list','carousel','badge'].map(d => (
+                                        <button
+                                            key={d}
+                                            onClick={() => setConfig({...config, design: d})}
+                                            className={`p-2 rounded-lg border text-xs capitalize transition-all duration-200 ${
+                                                config.design === d
+                                                    ? 'bg-blue-600/10 border-blue-600 text-blue-400 ring-1 ring-blue-600/20'
+                                                    : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300'
+                                            }`}
+                                        >
+                                            {d}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
 
                         {/* 4. DOMAINS */}
@@ -505,6 +526,7 @@ export default function Builder() {
                                         <ReviewsWidget
                                             // Theme (always client-side for preview)
                                             theme={config.theme}
+                                            design={config.design}
 
                                             // Prefer instance review flow
                                             instanceId={selectedInstanceId !== 'new' ? Number(selectedInstanceId) : null}
