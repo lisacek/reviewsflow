@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react'
+import ErrorBanner from './ErrorBanner.jsx'
+import { getInstanceReviews, getInstanceStats } from '../api.js'
 
 // --- 1. PLACEHOLDER DATA (Shown when setting up) ---
 const PLACEHOLDER_DATA = {
@@ -55,12 +57,14 @@ export const   ReviewsWidget = ({
                                 sort = 'newest',
                                 theme = 'dark',
                                 locale,
-                                publicKey = null
+                                publicKey = null,
+                                instanceId = null
                               }) => {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [effectiveTheme, setEffectiveTheme] = useState('light')
+  const [stats, setStats] = useState(null)
 
   // Load More State
   const [visibleCount, setVisibleCount] = useState(6)
@@ -105,67 +109,98 @@ export const   ReviewsWidget = ({
 
   // --- DATA FETCHING ---
   useEffect(() => {
-    // 1. Placeholder Mode
-    if (!placeUrl && !publicKey) {
+    // 1. Placeholder Mode (Immediate return)
+    if (!publicKey && !instanceId) {
       setData(PLACEHOLDER_DATA)
       setLoading(false)
       setError(null)
       return
     }
 
-    let cancelled = false
+    // A. Create the AbortController
+    const controller = new AbortController()
+    const signal = controller.signal
+
     async function run() {
       setLoading(true)
       setError(null)
+
       try {
         const apiBase = import.meta.env.VITE_API_BASE || ''
         let resp
 
-        // 2. Production Mode (Existing Instance)
+        // 2. Public mode by public key
         if (publicKey) {
-          resp = await fetch(`${apiBase}/public/reviews/${encodeURIComponent(publicKey)}`)
-        }
-        // 3. Preview Mode (Manual)
-        else {
-          resp = await fetch(`${apiBase}/reviews`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              place_url: placeUrl,
-              locales: [locale || 'en-US'],
-              min_rating: Number(minRating),
-              max_reviews: Number(maxReviews),
-              sort: sort
-            })
+          resp = await fetch(`${apiBase}/public/reviews/${encodeURIComponent(publicKey)}`, {
+            signal // Pass the signal here
           })
         }
-
-        const body = await resp.json()
-        if (!resp.ok) throw new Error(body?.detail || body?.message || `HTTP ${resp.status}`)
-
-        // Robust check: body might be Array or Object
-        const first = Array.isArray(body) ? body[0] : body
-
-        if (!cancelled) {
+        // 3. Instance preview (authenticated)
+        else if (instanceId) {
+          const body = await getInstanceReviews(instanceId)
+          const first = Array.isArray(body) ? body[0] : body
           if (first && Array.isArray(first.reviews)) {
             setData(first)
-            // Reset pagination on new data
+            // Fetch stats for totals/average
+            try { setStats(await getInstanceStats(instanceId)) } catch (_) {}
             const w = window.innerWidth
             const initialCols = w >= 1024 ? 3 : w >= 768 ? 2 : 1
             setVisibleCount(initialCols * 2)
+            return
           } else {
-            throw new Error("No reviews found")
+            throw new Error('No reviews found')
           }
         }
+        // 4. No longer supporting direct /reviews; fallback handled earlier
+        else {
+          throw new Error('No data source provided')
+        }
+
+        const body = await resp.json()
+        if (!resp.ok) {
+          const err = new Error(body?.detail || body?.message || body?.error?.message || `HTTP ${resp.status}`)
+          err.status = resp.status
+          err.code = body?.error?.code
+          err.requestId = body?.requestId
+          err.screenshot = body?.error?.screenshot
+          err.details = body?.error?.details
+          throw err
+        }
+
+        const first = Array.isArray(body) ? body[0] : body
+
+        if (first && Array.isArray(first.reviews)) {
+          setData(first)
+          // Reset pagination logic
+          const w = window.innerWidth
+          const initialCols = w >= 1024 ? 3 : w >= 768 ? 2 : 1
+          setVisibleCount(initialCols * 2)
+        } else {
+          throw new Error("No reviews found")
+        }
+
       } catch (e) {
-        if (!cancelled) setError(e?.message || 'Failed to load')
+        // B. Specific check for AbortError
+        if (e.name === 'AbortError') {
+          console.log('Request cancelled') // Optional: for debugging
+          return // Do not update state/error if cancelled
+        }
+        setError(e?.message || 'Failed to load')
       } finally {
-        if (!cancelled) setLoading(false)
+        // Only turn off loading if NOT aborted
+        if (!signal.aborted) {
+          setLoading(false)
+        }
       }
     }
+
     run()
-    return () => { cancelled = true }
-  }, [placeUrl, minRating, maxReviews, sort, locale, publicKey])
+
+    // C. Cleanup function: Aborts the fetch if deps change or component unmounts
+    return () => {
+      controller.abort()
+    }
+  }, [placeUrl, minRating, maxReviews, sort, locale, publicKey, instanceId])
 
   // --- STYLES ---
   const isDark = effectiveTheme === 'dark'
@@ -212,7 +247,11 @@ export const   ReviewsWidget = ({
     )
   }
 
-  if (error) return <div className={`${bgColor} ${textColor} p-4 rounded-lg border ${borderColor}`}>{error}</div>
+  if (error) return (
+    <div className={`${bgColor} ${textColor} p-4 rounded-lg border ${borderColor}`}>
+      <ErrorBanner error={error} />
+    </div>
+  )
 
   if (!data) return null
 
@@ -226,11 +265,11 @@ export const   ReviewsWidget = ({
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
             <h2 className="text-2xl font-bold mb-2">Customer Reviews</h2>
-            <div className="flex items-center justify-center gap-2">
-              <span className="text-3xl font-bold">{data.averageRating}</span>
-              <StarRating rating={Math.round(data.averageRating)} />
-              <span className="text-sm opacity-60">({data.count} reviews)</span>
-            </div>
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-3xl font-bold">{(stats?.averageRating ?? data.averageRating)}</span>
+            <StarRating rating={Math.round(data.averageRating)} />
+            <span className="text-sm opacity-60">({(stats?.totalCount ?? data.count)} reviews)</span>
+          </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

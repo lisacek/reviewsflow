@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import ErrorBanner from '../components/ErrorBanner.jsx'
 
 const StarRating = ({ rating, className = '' }) => (
   <div className={`flex ${className}`}>
@@ -36,16 +37,40 @@ export default function Widget({ apiBase, instance, minRating = 4, maxReviews = 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [visibleCount, setVisibleCount] = useState(6)
+  const [columns, setColumns] = useState(3)
 
   useEffect(() => {
     let cancelled = false
+    // responsive columns + initial visible rows
+    const updateLayout = () => {
+      const w = window.innerWidth
+      let cols = 1
+      if (w >= 1024) cols = 3
+      else if (w >= 768) cols = 2
+      setColumns(cols)
+    }
+    updateLayout()
+    const w = window.innerWidth
+    const initCols = w >= 1024 ? 3 : w >= 768 ? 2 : 1
+    setVisibleCount(initCols * 2)
+
+    window.addEventListener('resize', updateLayout)
     async function run() {
       setLoading(true)
       setError(null)
       try {
         const resp = await fetch(`${apiBase}/public/reviews/${encodeURIComponent(instance)}`)
         const body = await resp.json()
-        if (!resp.ok) throw new Error(body?.message || `HTTP ${resp.status}`)
+        if (!resp.ok) {
+          const err = new Error(body?.detail || body?.message || body?.error?.message || `HTTP ${resp.status}`)
+          err.status = resp.status
+          err.code = body?.error?.code
+          err.requestId = body?.requestId
+          err.screenshot = body?.error?.screenshot
+          err.details = body?.error?.details
+          throw err
+        }
         const first = Array.isArray(body) ? body[0] : body
         if (!cancelled) setData(first)
       } catch (e) {
@@ -55,7 +80,7 @@ export default function Widget({ apiBase, instance, minRating = 4, maxReviews = 
       }
     }
     run()
-    return () => { cancelled = true }
+    return () => { cancelled = true; window.removeEventListener('resize', updateLayout) }
   }, [apiBase, instance, minRating, maxReviews, sort])
 
   const isDark = true
@@ -108,10 +133,17 @@ export default function Widget({ apiBase, instance, minRating = 4, maxReviews = 
       </div>
     )
   }
-  if (error) return <div className={`${bgColor} ${textColor} p-4 rounded-lg border border-zinc-800`}>{error}</div>
+  if (error) return (
+    <div className={`${bgColor} ${textColor} p-4 rounded-lg border border-zinc-800`}>
+      <ErrorBanner error={error} compact />
+    </div>
+  )
   if (!data) return null
 
-  const reviews = dedupe(data.reviews || []).slice(0, maxReviews)
+  const allReviews = dedupe(data.reviews || [])
+  const reviews = allReviews.slice(0, visibleCount)
+  const hasMore = reviews.length < allReviews.length
+  const handleLoadMore = () => setVisibleCount(prev => prev + (columns * 2))
 
   return (
     <div className={`w-full h-full p-6 transition-colors duration-300 ${bgColor} ${textColor} overflow-y-auto rounded-xl border border-zinc-800`}>
@@ -143,6 +175,13 @@ export default function Widget({ apiBase, instance, minRating = 4, maxReviews = 
             </div>
           ))}
         </div>
+        {hasMore && (
+          <div className="flex justify-center">
+            <button onClick={handleLoadMore} className="mt-6 px-4 py-2 text-sm rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 transition-colors">
+              Load More
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

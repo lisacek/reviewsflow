@@ -74,13 +74,14 @@ async def api_stats(
         # Fallback to first available
         loc = next(iter(LOCALES.keys()))
 
+    # For stats, collect all available reviews (max_reviews=0 means "all")
     payload = await get_or_scrape(
         db,
         inst.place_url,
         loc,
         force_refresh,
         1.0,
-        max_reviews or inst.max_reviews,
+        0,
         inst.sort,
     )
 

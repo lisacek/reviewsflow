@@ -1,12 +1,39 @@
 const BASE_URL = import.meta.env.VITE_API_BASE || '';
 
-const handleResponse = async (res) => {
-  if (!res.ok) {
-    const json = await res.json().catch(() => ({}));
-    throw new Error(json.detail || res.statusText);
+function normalizeError(status, body, statusText) {
+  let code = undefined;
+  let message = undefined;
+  let requestId = undefined;
+  let details = undefined;
+  let screenshot = undefined;
+
+  if (body && typeof body === 'object') {
+    // Our backend error schema
+    if (body.success === false && body.error) {
+      code = body.error.code || undefined;
+      message = body.error.message || undefined;
+      details = body.error.details || undefined;
+      screenshot = body.error.screenshot || undefined;
+      requestId = body.requestId || undefined;
+    }
+    // FastAPI default detail
+    if (!message && body.detail) {
+      message = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
+      code = code || 'http_' + String(status);
+    }
   }
-  return res.json();
-};
+
+  if (!message) message = `HTTP ${status} ${statusText || ''}`.trim();
+
+  const err = new Error(message);
+  err.status = status;
+  err.code = code;
+  err.requestId = requestId;
+  err.details = details;
+  err.screenshot = screenshot;
+  err.body = body;
+  return err;
+}
 
 function getToken() {
   try {
@@ -32,20 +59,13 @@ async function http(path, options = {}) {
   const isJson = resp.headers.get('content-type')?.includes('application/json');
   const respBody = isJson ? await resp.json() : await resp.text();
   if (!resp.ok) {
-    const err = new Error(`HTTP ${resp.status} ${resp.statusText}`);
-    err.status = resp.status;
-    err.body = respBody;
-    throw err;
+    throw normalizeError(resp.status, respBody, resp.statusText);
   }
   return respBody;
 }
 
 export async function getHealth() { return http('/health'); }
 export async function getLocales() { return http('/locales'); }
-
-export async function postReviews(payload) {
-  return http('/reviews', { method: 'POST', body: JSON.stringify(payload) });
-}
 
 export async function postRefresh(payload) {
   return http('/refresh', { method: 'POST', body: JSON.stringify(payload) });
@@ -63,30 +83,21 @@ export async function deleteCache(payload) {
   return http('/cache', { method: 'DELETE', body: JSON.stringify(payload) });
 }
 
-export async function createMonitor(payload) {
-  return http('/monitors', { method: 'POST', body: JSON.stringify(payload) });
-}
-
-export async function listMonitors() {
-  return http('/monitors');
-}
-
-export async function deleteMonitor(id) {
-  return http(`/monitors/${id}`, { method: 'DELETE' });
-}
+// Monitors were removed; no longer exported
 
 export const DEFAULT_SORT = 'newest';
 export const SORT_OPTIONS = ['newest', 'oldest', 'best', 'worst'];
 
-export async function getStats(query = {}) {
+// Instance-scoped APIs
+export async function getInstanceReviews(id) { return http(`/api/reviews/${id}`) }
+export async function getInstanceStats(id, opts = {}) {
   const params = new URLSearchParams();
-  if (query.place_url) params.set('place_url', query.place_url);
-  if (Array.isArray(query.locales)) query.locales.forEach(l => params.append('locales', l));
-  if (query.exclude_below != null) params.set('exclude_below', String(query.exclude_below));
-  if (query.max_reviews != null) params.set('max_reviews', String(query.max_reviews));
-  if (query.force_refresh != null) params.set('force_refresh', String(!!query.force_refresh));
+  if (opts.locale) params.set('locale', opts.locale);
+  if (opts.exclude_below != null) params.set('exclude_below', String(opts.exclude_below));
+  if (opts.max_reviews != null) params.set('max_reviews', String(opts.max_reviews));
+  if (opts.force_refresh != null) params.set('force_refresh', String(!!opts.force_refresh));
   const qs = params.toString();
-  return http(`/stats${qs ? `?${qs}` : ''}`);
+  return http(`/api/stats/${id}${qs ? `?${qs}` : ''}`);
 }
 
 // Auth + Admin APIs
@@ -127,21 +138,14 @@ export async function getPublicReviews(apiBase, publicKey) {
   return resp.json();
 }
 
-export const fetchReviewsPublic = (placeUrl, locales, minRating, maxReviews) =>
-    fetch(`${BASE_URL}/reviews`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        place_url: placeUrl,
-        locales: locales,
-        min_rating: minRating,
-        max_reviews: maxReviews,
-        sort: 'newest'
-      })
-    }).then(handleResponse);
+// Legacy POST /reviews removed
 
 export const fetchReviewsByInstance = (publicKey) =>
     fetch(`${BASE_URL}/public/reviews/${publicKey}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
-    }).then(handleResponse);
+    }).then(async (res) => {
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw normalizeError(res.status, body, res.statusText);
+      return body;
+    });

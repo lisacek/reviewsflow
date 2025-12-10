@@ -34,6 +34,27 @@ async def get_cache(place_url: str | None = None, locales: list[str] | None = No
     return out
 
 
+@router.get("/cache/debug")
+async def cache_debug(place_url: str, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select
+    from app.models import ReviewCache
+    stmt = select(ReviewCache).where(ReviewCache.place_url == str(place_url))
+    res = await db.execute(stmt)
+    rows = res.scalars().all()
+    out: list[dict] = []
+    for r in rows:
+        payload = r.payload if isinstance(r.payload, dict) else {}
+        out.append({
+            "place_url": r.place_url,
+            "locale": r.locale,
+            "updated_at": r.updated_at,
+            "avg_rating": r.avg_rating,
+            "params": payload.get("params"),
+            "count": payload.get("count"),
+        })
+    return out
+
+
 @router.delete("/cache")
 async def delete_cache(req: CacheDeleteRequest, db: AsyncSession = Depends(get_db)):
     locales = req.locales

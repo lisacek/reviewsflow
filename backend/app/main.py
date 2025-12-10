@@ -1,9 +1,15 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi import HTTPException
 from sqlalchemy import select, update
 from datetime import datetime, timezone
 import asyncio
 import sys
+import logging
+import traceback
+import uuid
 
 from app.db import engine, Base, AsyncSessionLocal
 from app.models import ReviewCache, User
@@ -11,10 +17,8 @@ from app.config import settings
 from app.auth import hash_password
 from app.api import core as api_core
 from app.api import auth_routes as api_auth
-from app.api import reviews as api_reviews
 from app.api import public as api_public
 from app.api import cache as api_cache
-from app.api import monitors as api_monitors
 from app.api import domains as api_domains
 from app.api import instances as api_instances
 from app.api import stats as api_stats
@@ -39,6 +43,85 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Configure basic logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger("reviewsflow")
+
+
+@app.middleware("http")
+async def add_request_id_and_handle_errors(request: Request, call_next):
+    request_id = str(uuid.uuid4())
+    request.state.request_id = request_id
+    try:
+        response = await call_next(request)
+    except HTTPException as he:
+        payload = {
+            "success": False,
+            "error": {
+                "code": f"http_{he.status_code}",
+                "message": he.detail if hasattr(he, "detail") else "HTTP error",
+            },
+            "requestId": request_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        return JSONResponse(status_code=he.status_code, content=payload)
+    except Exception as ex:
+        # Handle scraper errors explicitly to return helpful message + screenshot
+        try:
+            from app.scraper import ScrapeError  # local import to avoid cycles
+        except Exception:
+            ScrapeError = None  # type: ignore
+
+        if ScrapeError is not None and isinstance(ex, ScrapeError):
+            payload = {
+                "success": False,
+                "error": {
+                    "code": "scrape_failed",
+                    "message": getattr(ex, "message", "Scraping failed"),
+                    "screenshot": getattr(ex, "screenshot", None),
+                },
+                "requestId": request_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            return JSONResponse(status_code=502, content=payload)
+
+        # Log with traceback and request id
+        logger.error("Unhandled exception %s\n%s", request_id, traceback.format_exc())
+        payload = {
+            "success": False,
+            "error": {
+                "code": "internal_error",
+                "message": "An unexpected error occurred. Please try again later.",
+            },
+            "requestId": request_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        return JSONResponse(status_code=500, content=payload)
+
+    # Attach request id header for success responses too
+    try:
+        response.headers["X-Request-ID"] = request_id
+    except Exception:
+        pass
+    return response
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
+    payload = {
+        "success": False,
+        "error": {
+            "code": "validation_error",
+            "message": "Request validation failed",
+            "details": exc.errors(),
+        },
+        "requestId": request_id,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    return JSONResponse(status_code=422, content=payload)
 
 
 @app.on_event("startup")
@@ -75,10 +158,8 @@ async def startup():
 # Include routers
 app.include_router(api_core.router)
 app.include_router(api_auth.router)
-app.include_router(api_reviews.router)
 app.include_router(api_public.router)
 app.include_router(api_cache.router)
-app.include_router(api_monitors.router)
 app.include_router(api_domains.router)
 app.include_router(api_instances.router)
 app.include_router(api_stats.router)

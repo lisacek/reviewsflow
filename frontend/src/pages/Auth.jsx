@@ -3,6 +3,7 @@ import { Mail, Lock, Loader2, ArrowRight, AlertCircle, Sparkles } from 'lucide-r
 import { login, register, me } from '../api.js';
 import { saveToken } from '../auth.js';
 import { setPageSEO } from '../seo.js';
+import ErrorBanner from '../components/ErrorBanner.jsx'
 
 export default function AuthPage({ onAuthed, initialMode = 'login' }) {
   useEffect(() => {
@@ -127,12 +128,7 @@ export default function AuthPage({ onAuthed, initialMode = 'login' }) {
             </div>
 
             {/* Error Message */}
-            {error && (
-                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 flex items-start gap-3 animate-in fade-in slide-in-from-top-1">
-                  <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-                  <span className="text-sm text-red-200 leading-relaxed">{error}</span>
-                </div>
-            )}
+            {error && (<ErrorBanner error={error} />)}
 
             {/* Submit Button */}
             <button

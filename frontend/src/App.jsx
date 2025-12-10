@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from 'react';
 
-import {getHealth, getLocales, postReviews, getStats, DEFAULT_SORT} from './api.js';
+import {getHealth, getLocales, DEFAULT_SORT} from './api.js';
 import AuthPage from './pages/Auth.jsx';
 import Onboarding from './pages/Onboarding.jsx';
 import LandingPage from './pages/LandingPage.jsx';
@@ -303,40 +303,9 @@ export default function App() {
         setReviewsData(null);
         setStatsData(null);
         try {
-            const payload = {
-                place_url: settings.placeUrl,
-                min_rating: settings.minRating,
-                max_reviews: settings.maxReviews,
-                sort,
-                force_refresh: true,
-            };
-            if (selectedLocales.length) payload.locales = selectedLocales;
-            const result = await postReviews(payload);
-            const first = Array.isArray(result) ? result[0] : result;
-            if (first && Array.isArray(first.reviews)) {
-                const seen = new Set();
-                const unique = first.reviews.filter((r) => {
-                    const id = r?.reviewId ?? r?.id ?? JSON.stringify(r);
-                    if (seen.has(id)) return false;
-                    seen.add(id);
-                    return true;
-                });
-                setReviewsData({...first, reviews: unique});
-            } else {
-                setReviewsData(first || null);
-            }
-            // fetch stats for a single locale (first selected if available)
-            try {
-                const singleLocale = selectedLocales.length ? [selectedLocales[0]] : undefined;
-                const stats = await getStats({
-                    place_url: settings.placeUrl,
-                    locales: singleLocale,
-                    force_refresh: true
-                });
-                setStatsData(stats);
-            } catch {
-                setStatsData(null);
-            }
+            // Legacy preview via /reviews and /stats has been removed.
+            // Direct widget preview now lives in the Builder page using instances.
+            setError('Preview here is deprecated. Use the Builder page to create/select an instance for preview.');
         } catch (e) {
             setError(e?.message || 'Failed to fetch reviews');
         } finally {
@@ -395,6 +364,9 @@ export default function App() {
                             setAuthMode('register');
                             setNavView('auth');
                         }}
+                        onReadDocs={() => {
+                            setNavView('api');
+                        }}
                         authed={authed}
                     />
                 </main>
@@ -413,41 +385,28 @@ export default function App() {
             )}
             {navView === 'generator' && !authed && (
                 <main>
-                    <LandingPage onLogin={() => {
-                        setAuthMode('login');
-                        setNavView('auth');
-                    }} onRegister={() => {
-                        setAuthMode('register');
-                        setNavView('auth');
-                    }}/>
+                    <LandingPage
+                        onLogin={() => {
+                            setAuthMode('login');
+                            setNavView('auth');
+                        }}
+                        onRegister={() => {
+                            setAuthMode('register');
+                            setNavView('auth');
+                        }}
+                        onReadDocs={() => {
+                            setNavView('api');
+                        }}
+                    />
                 </main>
             )}
 
-            {navView === 'api' && authed && (
+            {navView === 'api' && (
                 <main>
                     <ApiDocs/>
-                </main>
-            )}
-            {navView === 'api' && !authed && (
-                <main>
-                    <LandingPage onLogin={() => {
-                        setAuthMode('login');
-                        setNavView('auth');
-                    }} onRegister={() => {
-                        setAuthMode('register');
-                        setNavView('auth');
-                    }}/>
                 </main>
             )}
         </div>
     );
 }
-
-
-
-
-
-
-
-
 

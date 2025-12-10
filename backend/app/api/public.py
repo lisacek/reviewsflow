@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import asyncio
@@ -11,6 +12,7 @@ from app.locales import LOCALES
 from app.config import settings
 
 router = APIRouter(prefix="/public", tags=["public"])
+logger = logging.getLogger("reviewsflow")
 
 
 def _origin_host(request: Request) -> str | None:
@@ -45,6 +47,15 @@ async def public_reviews(public_key: str, request: Request, db: AsyncSession = D
             raise HTTPException(status_code=403, detail="Origin not allowed")
 
     locales = inst.locales or settings.DEFAULT_LOCALES or ["en-US"]
+    logger.info(
+        "[PUBLIC] reviews key=%s place=%s locales=%s min=%s max=%s sort=%s",
+        public_key,
+        inst.place_url,
+        locales,
+        inst.min_rating,
+        inst.max_reviews,
+        inst.sort,
+    )
     tasks = [
         get_or_scrape(
             db,
@@ -52,10 +63,26 @@ async def public_reviews(public_key: str, request: Request, db: AsyncSession = D
             loc,
             False,
             inst.min_rating,
-            inst.max_reviews,
+            max(inst.max_reviews or 0, 100),
             inst.sort,
         )
         for loc in locales if loc in LOCALES
     ]
-    return await asyncio.gather(*tasks)
+    result = await asyncio.gather(*tasks)
+    try:
+        # Log brief cache info from payloads
+        infos = []
+        for r in result:
+            if isinstance(r, dict):
+                p = r.get("params", {}) if isinstance(r.get("params"), dict) else {}
+                infos.append({
+                    "loc": r.get("locale"),
+                    "count": r.get("count"),
+                    "avg": r.get("averageRating"),
+                    "params": p,
+                })
+        logger.info("[PUBLIC] result key=%s info=%s", public_key, infos)
+    except Exception:
+        pass
+    return result
 

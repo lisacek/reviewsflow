@@ -1,4 +1,4 @@
-# ReviewFlow – Self‑Hosted Reviews Widget
+# ReviewsFlow – Self‑Hosted Reviews Widget
 
 A Vite + React frontend that includes:
 - A builder UI to configure your review widget.

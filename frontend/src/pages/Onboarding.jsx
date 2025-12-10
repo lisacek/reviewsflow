@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { setPageSEO } from '../seo.js'
 import { getDomains, addDomain, deleteDomainById, getInstances, createInstance } from '../api.js'
+import ErrorBanner from '../components/ErrorBanner.jsx'
 
 export default function Onboarding() {
   useEffect(() => {
@@ -63,7 +64,7 @@ export default function Onboarding() {
   return (
     <div className="p-6 space-y-8">
       <h2 className="text-xl font-semibold">Onboarding</h2>
-      {error && <div className="text-xs text-red-400">{error}</div>}
+      {error && <ErrorBanner error={error} />}
 
       {/* Domains */}
       <section className="space-y-3">

@@ -7,6 +7,7 @@ import {
 import {motion, AnimatePresence} from 'framer-motion';
 import {getDomains, addDomain, deleteDomainById, createInstance, getInstances, patchInstance, deleteInstanceById} from '../api.js';
 import {ReviewsWidget} from '../components/ReviewsWidget.jsx';
+import ErrorBanner from '../components/ErrorBanner.jsx'
 import Prism from "prismjs";
 import "prismjs/themes/prism-tomorrow.css";
 import "prismjs/components/prism-markup"; // html
@@ -116,7 +117,7 @@ export default function Builder() {
             setNewDomain('');
             await fetchData();
         } catch (e) {
-            setError(e?.message || 'Failed to add domain');
+            setError(e || e?.message || 'Failed to add domain');
         } finally {
             setLoading(false);
         }
@@ -127,7 +128,7 @@ export default function Builder() {
             await deleteDomainById(id);
             await fetchData();
         } catch (e) {
-            setError(e?.message || 'Failed to delete domain');
+            setError(e || e?.message || 'Failed to delete domain');
         }
     }
 
@@ -158,7 +159,7 @@ export default function Builder() {
             setSelectedInstanceId(inst.id); // Auto-select the new instance
             setIsReadOnly(false); // Keep editable to allow PATCH updates
         } catch (e) {
-            setError(e?.message || 'Failed to create instance');
+            setError(e || e?.message || 'Failed to create instance');
         } finally {
             setLoading(false);
         }
@@ -180,7 +181,7 @@ export default function Builder() {
             setGeneratedInstance(updated);
             await fetchData();
         } catch (e) {
-            setError(e?.message || 'Failed to update instance');
+            setError(e || e?.message || 'Failed to update instance');
         } finally {
             setLoading(false);
         }
@@ -210,7 +211,7 @@ export default function Builder() {
             setLocaleInput('en-US');
             setIsReadOnly(false);
         } catch (e) {
-            setError(e?.message || 'Failed to delete instance');
+            setError(e || e?.message || 'Failed to delete instance');
         } finally {
             setLoading(false);
         }
@@ -425,10 +426,8 @@ export default function Builder() {
                         </div>
 
                         {error && (
-                            <motion.div initial={{opacity: 0, y: -5}} animate={{opacity: 1, y: 0}}
-                                        className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex gap-3 items-start text-red-400 text-xs">
-                                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5"/>
-                                <span className="leading-relaxed">{error}</span>
+                            <motion.div initial={{opacity: 0, y: -5}} animate={{opacity: 1, y: 0}}>
+                                <ErrorBanner error={error} />
                             </motion.div>
                         )}
 
@@ -500,17 +499,18 @@ export default function Builder() {
                                     </div>
                                     <div className="flex-1 overflow-y-auto">
                                         <ReviewsWidget
-                                            // Manual props (used if publicKey is null)
+                                            // Theme (always client-side for preview)
+                                            theme={config.theme}
+
+                                            // Prefer instance review flow
+                                            instanceId={selectedInstanceId !== 'new' ? Number(selectedInstanceId) : null}
+                                            publicKey={isReadOnly ? generatedInstance?.public_key : null}
+
+                                            // Legacy manual props are ignored now; kept for placeholder mode
                                             placeUrl={config.placeUrl}
                                             minRating={config.minRating}
                                             maxReviews={config.maxReviews}
                                             locale={config.locales[0]}
-
-                                            // Theme (always client-side for preview)
-                                            theme={config.theme}
-
-                                            // Public Key (Only passed if we are viewing an existing instance)
-                                            publicKey={isReadOnly ? generatedInstance?.public_key : null}
                                         />
                                     </div>
                                 </motion.div>
