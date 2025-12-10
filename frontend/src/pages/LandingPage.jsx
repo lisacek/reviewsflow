@@ -394,12 +394,23 @@ docker compose -f docker-compose.ghcr.yml up -d
                                     {line.startsWith('#') ? (
                                         <span className="text-zinc-500 italic">{line}</span>
                                     ) : (
-                                        <span dangerouslySetInnerHTML={{
-                                            __html: line
-                                                .replace(/(curl|docker|Invoke-WebRequest)/g, '<span class="text-blue-400">$1</span>')
-                                                .replace(/(?<!text)(-[a-zA-Z]+)/g, '<span class="text-purple-400">$1</span>')
-                                                .replace(/(https?:\/\/[^\s\\]+)/g, '<span class="text-green-400">$1</span>')
-                                        }} />
+                                        <span
+                                            dangerouslySetInnerHTML={{
+                                                __html: line
+                                                    .replace(
+                                                        /\b(curl|docker|Invoke-WebRequest)\b/g,
+                                                        '<span class="text-blue-400">$1</span>'
+                                                    )
+                                                    .replace(
+                                                        /(^|\s)(-[a-zA-Z]+)/g,
+                                                        '$1<span class="text-purple-400">$2</span>'
+                                                    )
+                                                    .replace(
+                                                        /(https?:\/\/[^\s\\<]+)/g,
+                                                        '<span class="text-green-400">$1</span>'
+                                                    )
+                                            }}
+                                        />
                                     )}
                                 </span>
                             </div>

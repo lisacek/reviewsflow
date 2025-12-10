@@ -6,7 +6,11 @@ import {
 import { getToken } from '../auth.js';
 import { setPageSEO } from '../seo.js';
 
-const API_BASE = window.location.origin;
+const API_BASE =
+    import.meta.env.VITE_API_BASE?.trim()
+        ? import.meta.env.VITE_API_BASE
+        : window.location.origin;
+
 
 export default function ApiDocs() {
     useEffect(() => {
