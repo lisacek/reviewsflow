@@ -1,6 +1,6 @@
 fastapi
 uvicorn[standard]
-playwright
+playwright==1.48.0
 playwright-stealth
 sqlalchemy
 aiosqlite
