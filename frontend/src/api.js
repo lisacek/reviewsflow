@@ -116,7 +116,7 @@ export async function login({ username, password }) {
   });
 }
 
-export async function me() { return http('/me'); }
+export async function me() { return http('/auth/me'); }
 
 // Domains
 export async function getDomains() { return http('/domains'); }
