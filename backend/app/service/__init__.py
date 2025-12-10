@@ -6,6 +6,7 @@ from app.locales import LOCALES
 from app.config import settings
 from datetime import datetime, timedelta, timezone
 import asyncio
+import hashlib
 
 _SCRAPE_SEM = asyncio.Semaphore(max(1, int(getattr(settings, "MAX_PLAYWRIGHT_INSTANCES", 2))))
 
@@ -38,9 +39,10 @@ async def _build_payload_from_db(db: AsyncSession, place_url: str, locale: str, 
             order = [ReviewEntry.scraped_at.asc(), ReviewEntry.id.asc()]
         else:
             order = [ReviewEntry.scraped_at.desc(), ReviewEntry.id.desc()]
+    place_hash = hashlib.sha256(place_url.encode("utf-8")).hexdigest()
     q = await db.execute(
         select(ReviewEntry)
-        .where(ReviewEntry.place_url == place_url, ReviewEntry.locale == locale)
+        .where(ReviewEntry.place_url_hash == place_hash, ReviewEntry.locale == locale)
         .order_by(*order)
     )
     rows = q.scalars().all()
@@ -110,9 +112,10 @@ async def get_or_scrape(
     place_url_str = str(place_url)
 
     # TTL marker from ReviewCache
+    place_hash = hashlib.sha256(place_url_str.encode("utf-8")).hexdigest()
     q = await db.execute(
         select(ReviewCache)
-        .where(ReviewCache.place_url == place_url_str, ReviewCache.locale == locale)
+        .where(ReviewCache.place_url_hash == place_hash, ReviewCache.locale == locale)
         .order_by(ReviewCache.updated_at.desc(), ReviewCache.id.desc())
     )
     cached = q.scalars().first()
@@ -147,7 +150,7 @@ async def get_or_scrape(
             # Double-check TTL after acquiring lock
             q2 = await db.execute(
                 select(ReviewCache)
-                .where(ReviewCache.place_url == place_url_str, ReviewCache.locale == locale)
+                .where(ReviewCache.place_url_hash == place_hash, ReviewCache.locale == locale)
                 .order_by(ReviewCache.updated_at.desc(), ReviewCache.id.desc())
             )
             cached2 = q2.scalars().first()
@@ -179,7 +182,7 @@ async def get_or_scrape(
                     pass
                 # Insert unique
                 existing_q = await db.execute(
-                    select(ReviewEntry.review_id).where(ReviewEntry.place_url == place_url_str, ReviewEntry.locale == locale)
+                    select(ReviewEntry.review_id).where(ReviewEntry.place_url_hash == place_hash, ReviewEntry.locale == locale)
                 )
                 existing_ids = set(existing_q.scalars().all())
                 to_add = []
@@ -189,6 +192,7 @@ async def get_or_scrape(
                         continue
                     entry = ReviewEntry(
                         place_url=place_url_str,
+                        place_url_hash=place_hash,
                         locale=locale,
                         review_id=rid,
                         name=r.get("name") or "",
@@ -210,7 +214,7 @@ async def get_or_scrape(
                     cached2.updated_at = now
                     db.add(cached2)
                 else:
-                    db.add(ReviewCache(place_url=place_url_str, locale=locale, payload={}, avg_rating=0.0, updated_at=now))
+                    db.add(ReviewCache(place_url=place_url_str, place_url_hash=place_hash, locale=locale, payload={}, avg_rating=0.0, updated_at=now))
                 await db.commit()
 
     return await _build_payload_from_db(db, place_url_str, locale, min_rating, max_reviews, sort, initial_seed=initial_seed)

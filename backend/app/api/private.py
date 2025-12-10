@@ -138,7 +138,9 @@ async def list_review_items(
         raise HTTPException(status_code=404, detail="Instance not found")
 
     loc = locale or (inst.locales[0] if (inst.locales or []) else None) or "en-US"
-    q = select(ReviewEntry).where(ReviewEntry.place_url == inst.place_url, ReviewEntry.locale == loc)
+    import hashlib
+    place_hash = hashlib.sha256(inst.place_url.encode('utf-8')).hexdigest()
+    q = select(ReviewEntry).where(ReviewEntry.place_url_hash == place_hash, ReviewEntry.locale == loc)
     if not include_hidden:
         q = q.where(ReviewEntry.hidden == False)
     q = q.order_by(ReviewEntry.scraped_at.asc(), ReviewEntry.id.asc()).offset(max(0, int(offset))).limit(max(1, int(limit)))
@@ -180,10 +182,12 @@ async def hide_review_item(
     if not inst:
         raise HTTPException(status_code=404, detail="Instance not found")
 
+    import hashlib
+    place_hash = hashlib.sha256(inst.place_url.encode('utf-8')).hexdigest()
     stmt = (
         update(ReviewEntry)
         .where(
-            ReviewEntry.place_url == inst.place_url,
+            ReviewEntry.place_url_hash == place_hash,
             ReviewEntry.locale == body.locale,
             ReviewEntry.review_id == body.reviewId,
         )
@@ -212,8 +216,10 @@ async def delete_review_item(
     if not inst:
         raise HTTPException(status_code=404, detail="Instance not found")
 
+    import hashlib
+    place_hash = hashlib.sha256(inst.place_url.encode('utf-8')).hexdigest()
     stmt = delete(ReviewEntry).where(
-        ReviewEntry.place_url == inst.place_url,
+        ReviewEntry.place_url_hash == place_hash,
         ReviewEntry.locale == body.locale,
         ReviewEntry.review_id == body.reviewId,
     )

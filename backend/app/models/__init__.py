@@ -7,7 +7,8 @@ class ReviewCache(Base):
     __tablename__ = "review_cache"
 
     id = Column(Integer, primary_key=True)
-    place_url = Column(String(1024), index=True)
+    place_url = Column(String(1024))
+    place_url_hash = Column(String(64), index=True)
     locale = Column(String(10), index=True)
     payload = Column(JSON)
     avg_rating = Column(Float)
@@ -70,6 +71,7 @@ class ReviewEntry(Base):
 
     id = Column(Integer, primary_key=True)
     place_url = Column(String(1024), index=True, nullable=False)
+    place_url_hash = Column(String(64), index=True, nullable=True)
     locale = Column(String(10), index=True, nullable=False)
     review_id = Column(String(128), nullable=False)
     name = Column(String(255), default="")
@@ -82,7 +84,8 @@ class ReviewEntry(Base):
     hidden = Column(Boolean, default=False, index=True)
 
     __table_args__ = (
-        UniqueConstraint("place_url", "locale", "review_id", name="uq_review_place_locale_id"),
-        Index("ix_reviews_place_locale", "place_url", "locale"),
+        # Use hash to keep unique key small for MySQL limits
+        UniqueConstraint("place_url_hash", "locale", "review_id", name="uq_review_place_hash_locale_id"),
+        Index("ix_reviews_place_hash_locale", "place_url_hash", "locale"),
     )
 
